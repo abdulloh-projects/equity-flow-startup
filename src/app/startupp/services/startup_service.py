@@ -6,6 +6,7 @@ from app.startupp.models import (
     BankInfo,
     Campaign,
     CompaignUpdate,
+    Investment,
     Startup,
     StartupCategory,
     StartupStage,
@@ -338,6 +339,8 @@ class StartupService(startup_pb2_grpc.StartupServiceServicer):
                     campaign.status = request.status
                 if request.HasField("deadline"):
                     campaign.deadline = request.deadline.ToDatetime().date()
+                if request.HasField("raised_amount"):
+                    campaign.raised_amount = request.raised_amount
                 campaign.save()
 
                 return startup_pb2.UpdateCompaignsResponse(
@@ -596,6 +599,90 @@ class StartupService(startup_pb2_grpc.StartupServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
             return startup_pb2.GetStartupsByUserResponse(success=False, message=str(e))
+
+    def RecordInvestment(self, request, context):
+        try:
+            with transaction.atomic():
+                startup = Startup.objects.get(id=request.startup_id)
+                campaign = Campaign.objects.get(id=request.campaign_id)
+                inv = Investment.objects.create(
+                    investor_id=request.investor_id,
+                    startup=startup,
+                    campaign=campaign,
+                    amount=request.amount,
+                    message=request.message if request.HasField("message") else "",
+                    status="completed",
+                )
+                campaign.raised_amount = float(campaign.raised_amount) + request.amount
+                campaign.save(update_fields=["raised_amount"])
+                return startup_pb2.RecordInvestmentResponse(
+                    success=True,
+                    message="Investment recorded successfully",
+                    investment_id=str(inv.id),
+                )
+        except Startup.DoesNotExist:
+            return startup_pb2.RecordInvestmentResponse(success=False, message="Startup not found")
+        except Campaign.DoesNotExist:
+            return startup_pb2.RecordInvestmentResponse(success=False, message="Campaign not found")
+        except Exception as e:
+            return startup_pb2.RecordInvestmentResponse(success=False, message=str(e))
+
+    def GetInvestmentsByUser(self, request, context):
+        try:
+            investments = Investment.objects.filter(investor_id=request.user_id).order_by("-created_at")
+            items = [
+                startup_pb2.InvestmentRecord(
+                    id=str(inv.id),
+                    investor_id=inv.investor_id,
+                    startup_id=inv.startup_id,
+                    campaign_id=inv.campaign_id,
+                    amount=float(inv.amount),
+                    message=inv.message or "",
+                    status=inv.status,
+                    created_at=_datetime_to_timestamp(inv.created_at),
+                )
+                for inv in investments
+            ]
+            return startup_pb2.GetInvestmentsByUserResponse(success=True, message="OK", investments=items)
+        except Exception as e:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return startup_pb2.GetInvestmentsByUserResponse(success=False, message=str(e))
+
+    def GetInvestmentsByStartup(self, request, context):
+        try:
+            investments = Investment.objects.filter(startup_id=request.startup_id).order_by("-created_at")
+            items = [
+                startup_pb2.InvestmentRecord(
+                    id=str(inv.id),
+                    investor_id=inv.investor_id,
+                    startup_id=inv.startup_id,
+                    campaign_id=inv.campaign_id,
+                    amount=float(inv.amount),
+                    message=inv.message or "",
+                    status=inv.status,
+                    created_at=_datetime_to_timestamp(inv.created_at),
+                )
+                for inv in investments
+            ]
+            return startup_pb2.GetInvestmentsByStartupResponse(success=True, message="OK", investments=items)
+        except Exception as e:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return startup_pb2.GetInvestmentsByStartupResponse(success=False, message=str(e))
+
+    def ListCategories(self, request, context):
+        try:
+            categories = StartupCategory.objects.all().order_by("id")
+            items = [
+                startup_pb2.CategoryItem(id=c.id, name=c.name)
+                for c in categories
+            ]
+            return startup_pb2.ListCategoriesResponse(success=True, message="OK", categories=items)
+        except Exception as e:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return startup_pb2.ListCategoriesResponse(success=False, message=str(e))
 
     def ListCampaignsByStartup(self, request, context):
         try:
