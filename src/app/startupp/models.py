@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 
 
@@ -106,6 +108,23 @@ class Documents(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Investment(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    investor_id = models.CharField(max_length=255)
+    startup = models.ForeignKey(Startup, on_delete=models.CASCADE)
+    campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    message = models.TextField(blank=True, default='')
+    status = models.CharField(max_length=50, default='completed')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'investments'
+
+    def __str__(self):
+        return f'Investment {self.id} by {self.investor_id}'
 
 
 class CompaignUpdate(models.Model):
