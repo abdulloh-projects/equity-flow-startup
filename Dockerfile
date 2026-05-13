@@ -2,7 +2,8 @@ FROM python:3.13-slim AS builder
 
 WORKDIR /app
 
-COPY . .
+COPY equity-flow-startup/src ./src
+COPY equity-flow-startup-grpc/protos/ src/external/equity-flow-startup/protos/
 
 RUN pip install --no-cache-dir grpcio-tools
 
@@ -13,7 +14,7 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY equity-flow-startup/requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
